@@ -1,0 +1,433 @@
+---
+title: "Analyzing Income Levels by PUMAs"
+author: "Afwan Kibria and Harrison Wang"
+output: word_document
+---
+```{r setup, include=FALSE}
+# include = FALSE --> hide both code and output from 
+#    html/Word file in this code chunk
+# echo = FALSE --> hide only code, but not output from 
+#    html/Word file in this code chunk
+knitr::opts_chunk$set(echo = FALSE)
+# the code above sets the default to NOT show code in the 
+# subsequent chunks unless you specifically add echo=TRUE
+
+# load packages
+require(tidyverse)
+require(gridExtra)
+require(knitr)
+require(broom) # tidy(), glance(), and augment()
+require(car)   # durbinWatsonTest()
+# new package:
+require(GGally) 
+
+# specify plot settings
+theme.info <- theme(plot.title = element_text(size=12, hjust=0.5),
+                    axis.title = element_text(size=12),
+                    axis.text=element_text(size=10)) 
+
+#upload file
+nyc.data <- read_delim("Prob & Stats Project Data - Sheet1.csv",
+                         delim=",",
+                         col_names=TRUE)
+
+names(nyc.data)
+
+nyc.data <- nyc.data %>%
+  rename(PUMA = "PUMA ",
+         Income_per_capita = "Per capita income (dollars)",
+         Unemployment_rate = "Unemployed (percent equivalent to unemployment rate)",
+         Pop_in_school = "Population 3 years and over enrolled in school",
+         Num_maj_felonies =  "# of Major Felonies Reported (from Community Profile)",
+         Bachelors = "Percentage of population with a Bachelor's degree or higher",
+         Tot_pop = "Total Population")
+```
+```{r, eval=FALSE}
+#number of PUMAs or observations
+total <- nyc.data %>%
+  count() %>%
+  pull()
+
+#checks for NAs
+nyc.data %>%
+  summarize_all(~sum(is.na(.)))
+```
+<!--# ID Number for PUMAs and Data Source (https://popfactfinder.planning.nyc.gov/)
+We first processed our data from a csv file, which we developed from our data collection spreadsheet in Google Sheets. In the spreadsheet there are 55 PUMAs (Public Use Microdata Areas), with 7 distinct variables pulled from the website NYC Population FactFinder (https://popfactfinder.planning.nyc.gov/) and an 8th variable, labeled "ID" for the purposes of closing the gap between PUMA numbers when graphically showing data across borough. Manhattan encompasses all PUMAs starting with '38' in their four-digit designation, while the Bronx, Staten Island, Brooklyn, and Queens PUMAs begin with '37', '39', '40', and '41', respectively.-->
+```{r, eval=FALSE}
+nyc.data %>%
+pull(PUMA, ID)
+```
+How are income levels affected by education in a place like New York City? Oftentimes we arrive at these logical conclusions about economics and relationships through careful observations of micro and macro trends, but how do these thought processes line up within a more condensed timeframe? To investigate further we took aggregate summary statistical data from 55 Public Use Microdata Areas (PUMAs), which encompass and resemble the various Community Districts, albeit reshaping them to obtain data from population groupings in excess of 100,000 people. We then sourced averages for income, crime (number of major felonies committed), population 3+ years enrolled in school (from nursery to graduate school), population percentage with a Bachelor's degree or higher, and unemployment rates for those of legal working age. Below were the summary statistics, indicating mean, median, maximums, minimums, standard deviations, and variance to depict the level of variability among data points across the board.
+
+While summary statistics were determined and analyzed for all 6 variables used (Income per Capita, Unemployment Rate, Number of Major Felonies, Population age 3+ in schools, Population with a Bachelor's degree or higher, and Total Population by PUMA), it appeared most logical to examine the summary statistics for the response variable, Income per capita, to examine its overall trend in the New York City area. For the following tibble, the summary statistics for Income per Capita for all PUMAs were determined as follows:
+
+<!--# Summary Statistics by Variable
+<!--As shown below, all of the variables possessed data that fluctuated greatly. Such was expected, and would provide a stronger basis for discerning patterns and correlations in the data via various combinations of variables with Income per capita.
+
+<!-- 1)	Income per capita (annual income divided by total population) -->
+<!-- 2)	Unemployment rates of those 16 years and older (legal working age) -->
+<!-- 3)	Population 3 years or older enrolled in school (from nursery school to graduate school) -->
+<!-- 4)	Number of major felonies -->
+<!-- 5)	Percentage of the population with a Bachelor’s degree or higher -->
+<!-- 6)  Total population count -->
+
+```{r, fig.width=2, fig.height=2}
+nyc.data %>%
+  summarize("Mean Income Per Capita (USD)" = formatC(mean(Income_per_capita), big.mark = ",", digits=7),
+            "Median Income Per Capita (USD)" = formatC(median(Income_per_capita), big.mark = ",", digits = 5),
+            "Maximum Income Per Capita (USD)" = formatC(max(Income_per_capita), big.mark = ",", digits=7), 
+            "Minimum Income Per Capita (USD)" = formatC(min(Income_per_capita), big.mark = ",", digits=5),
+            "Standard Deviation of Income Per Capita (USD)" = formatC(sd(Income_per_capita), big.mark = ",", digits=7),
+            "Variance of Income Per Capita (USD)" = formatC(var(Income_per_capita), big.mark = ",", digits=11)) %>%
+  kable(caption="Summary Statistics for Income Per Capita (USD)")
+
+```
+After evaluating the above values, it becomes clear that some degree of economic inequality exists, but as to whether or not there is some particular variable or influence that exists that yields such a disparity remains unclear. With a mean and median income of `$`37,094.67 and `$`28,747, respectively, compared alongside a staggering figure of `$`116,577 as a maximum, it no longer seems an unlikley prospect that some macroeconomic variable could potentially shed light on possible underlying influences on income levels.
+
+```{r, eval=FALSE}
+a2<- nyc.data %>%
+  summarize(mean(Unemployment_rate),
+            median(Unemployment_rate),
+            sd(Unemployment_rate),
+            max(Unemployment_rate),
+            min(Unemployment_rate),
+            var(Unemployment_rate))
+tibble(a2)
+```
+
+```{r, eval=FALSE}
+nyc.data %>%
+  summarize(mean(Pop_in_school),
+            median(Pop_in_school),
+            max(Pop_in_school),
+            min(Pop_in_school),
+            sd(Pop_in_school),
+            var(Pop_in_school)) %>%
+   kable(caption="Summary Statistics for Population Over Age 3 Enrolled in School (count)")
+```
+
+```{r, eval=FALSE}
+a4<- nyc.data %>%
+  summarize(mean(Num_maj_felonies),
+            median(Num_maj_felonies),
+            sd(Num_maj_felonies),
+            max(Num_maj_felonies),
+            min(Num_maj_felonies),
+            var(Num_maj_felonies))
+tibble(a4)
+```
+
+```{r, eval=FALSE}
+nyc.data %>%
+  summarize(mean(Bachelors),
+            median(Bachelors),
+            max(Bachelors),
+            min(Bachelors),
+            sd(Bachelors),
+            var(Bachelors)) %>%
+kable(caption="Summary Statistics for Bachelor's Degree Attainment Rate")
+```
+
+```{r, eval=FALSE}
+a6<- nyc.data %>%
+  summarize(mean(Tot_pop),
+            median(Tot_pop),
+            sd(Tot_pop),
+            max(Tot_pop),
+            min(Tot_pop),
+            var(Tot_pop))
+tibble(a6)
+```
+
+## Scatterplots with Regression Line and Correlations 
+
+```{r, eval=FALSE}
+s1 <- nyc.data %>%
+  ggplot(aes(x=Unemployment_rate, y=Income_per_capita)) +
+  geom_point(col="navyblue", size=1.5)+
+  ggtitle("Unemployment vs. Income") +
+  labs(x="unemployment rate (percentage)", y="income per capita (US dollars)") +  
+  theme.info
+```
+
+```{r, eval=TRUE}
+#log transformation
+s1.transform <- nyc.data %>%
+  mutate(log.income = log(Income_per_capita),
+         log.unemployment = log(Unemployment_rate)) %>%  
+  ggplot(aes(x=log.unemployment, y=log.income)) +
+  geom_point(col="firebrick", size=1.5)+
+  ggtitle("log(Income Per Capita) vs. log(Unemployment Rate)") +
+  labs(x="log(unemployment rate (%))", y="log(income per capita (US dollars)") +  
+  theme.info
+w.1 <- s1.transform + geom_smooth(method="lm", se=FALSE, col="firebrick", size=2)
+cor.s1 <- round(cor(nyc.data$Income_per_capita, nyc.data$Unemployment_rate), digits=3)
+```
+
+```{r, eval=FALSE}
+s2 <- nyc.data %>%
+  ggplot(aes(x=Pop_in_school, y=Income_per_capita)) +
+  geom_point(col="navyblue", size=1.5)+
+  ggtitle("School Enrollment vs. Income") +
+  labs(x="population count", y="income per capita (US dollars)") +  
+  theme.info
+s2
+
+nyc.data %>%
+  summarize(cor(Pop_in_school, Income_per_capita)) %>%
+  kable(caption="Income Per Capita Versus Population Over Age 3 Enrolled in School")
+```
+
+```{r}
+#log transformation
+s2.transform <- nyc.data %>%
+  mutate(log.income = log(Income_per_capita),
+         log.schoolenrollment = log(Pop_in_school)) %>%  
+  ggplot(aes(x=log.schoolenrollment, y=log.income)) +
+  geom_point(col="navyblue", size=1.5)+
+  ggtitle("log(Income Per Capita) vs. log(Age 3+ in School)") +
+  labs(x="log(Population Count)", y="log(Income Per Capita (US dollars))") +  
+  theme.info
+k.1 <- s2.transform + geom_smooth(method="lm", se=FALSE, col="navyblue", size=2)
+
+cor.s2 <- round(cor(nyc.data$Income_per_capita, nyc.data$Pop_in_school), digits=3)
+
+#nyc.data %>%
+ # summarize("Correlation Coefficient" = cor(log(Pop_in_school), log(Income_per_capita))) %>%
+#kable(caption="Income Per Capita (USD) vs. \nPopulation Over Age 3 Enrolled in School")
+```
+
+```{r, eval=FALSE}
+s3 <- nyc.data %>%
+  ggplot(aes(x=Num_maj_felonies, y=Income_per_capita)) +
+  geom_point(col="navyblue", size=1.5)+
+  ggtitle("Crime vs. Income") +
+  labs(x="major felony count", y="income per capita (US dollars)") +  
+  theme.info
+```
+
+```{r, fig.width=9, fig.height=4, message=FALSE}
+#log transformation
+s3.transform <- nyc.data %>%
+  mutate(log.income = log(Income_per_capita),
+         log.crime = log(Num_maj_felonies)) %>%  
+  ggplot(aes(x=log.crime, y=log.income)) +
+  geom_point(col="firebrick", size=1.5)+
+  ggtitle("log(Income Per Capita) vs. log(Felony Crime)") +
+  labs(x="log(felony count)", y="log(income per capita (US dollars))") +  
+  theme.info
+w.2 <- s3.transform + geom_smooth(method="lm", se=FALSE, col="firebrick", size=2)
+cor.s3 <- round(cor(nyc.data$Income_per_capita, nyc.data$Num_maj_felonies), digits=3)
+grid.arrange(w.1, w.2, ncol=2)
+```
+
+```{r, eval=FALSE}
+s4 <- nyc.data %>%
+  ggplot(aes(x=Bachelors, y=Income_per_capita)) +
+  geom_point(col="navyblue", size=1.5)+
+  ggtitle("Bachelor's Degree vs. Income") +
+  labs(x="Population with Bachelor's Degree (percentage)", y="income per capita (US dollars)") +  
+  theme.info
+s4
+
+nyc.data %>%
+  summarize(cor(Bachelors, Income_per_capita)) %>%
+  kable(caption="Income Per Capita Versus Bachelor's Degree")
+```
+
+```{r, fig.width=9, fig.height=4, message=FALSE}
+#log transformation
+s4.transform <- nyc.data %>%
+  mutate(log.income = log(Income_per_capita),
+         log.bachelor = log(Bachelors)) %>%  
+  ggplot(aes(x=log.bachelor, y=log.income)) +
+  geom_point(col="navyblue", size=1.5)+
+  ggtitle("log(Income Per Capita) vs. log(Bachelor's Degree)") +
+  labs(x="log(Bachelor's Degree (percentage))", y="log(Income Per Capita (US dollars))")+ #scale_y_continuous(breaks=seq(-1000, 1500, by=500), 
+                     #labels=formatC(seq(-1000, 1500, by=500), big.mark=",")) +
+  theme.info
+k.2 <- s4.transform + geom_smooth(method="lm", se=FALSE, col="navyblue", size=2)
+
+cor.s4 <- round(cor(nyc.data$Income_per_capita, nyc.data$Pop_in_school), digits=3)
+#nyc.data %>%
+ # summarize("Correlation Coefficient" = cor(log(Bachelors), log(Income_per_capita))) %>%
+ # kable(caption="Income Per Capita (USD) vs.\nBachelor's Degree")
+
+grid.arrange(k.1, k.2, ncol=2)
+```
+
+<!--# To check that educational involvement correlates to crime
+When examining crime as it related to the other variables in this case, it would appear as though little to no correlation existed here, though again, this could be attributed to the inaccuracy yielded by utilizing summary statistics from PUMAs as their own individual data points rather than sourcing data by nuances on an individual level. The limitations on accuracy are then chalked up to time and accessibility constraints in data aggregation.-->
+
+```{r, eval=FALSE}
+p1 <- nyc.data %>%
+  ggplot(aes(x=Bachelors, y=Num_maj_felonies)) +
+  geom_point(col="navyblue", size=0.5)+
+  ggtitle("Bachelor's Degree vs. Crime") +
+  labs(x="population with Bachelor's degree (percentage)", y="major felonies committed") +  
+  theme.info
+
+nyc.data %>%
+  summarize(cor(Bachelors, Num_maj_felonies)) %>%
+  kable(caption="Correlation Between Bachelor's Degree and Crime")
+```
+
+```{r, fig.width=6, fig.height=2}
+p2 <- nyc.data %>%
+  ggplot(aes(x=Pop_in_school, y=Num_maj_felonies)) +
+  geom_point(col="navyblue", size=0.5)+
+  ggtitle("School Enrollment vs. Crime") +
+  labs(x="population over the age of 3 in school (count)", y="major felonies committed in the neighborhood") +  
+  theme.info
+cor.p2 <- round(cor(nyc.data$Pop_in_school, nyc.data$Num_maj_felonies), digits=3)
+#grid.arrange(p1, p2, ncol=2)
+```
+
+```{r, eval=FALSE}
+## To check that crime rates can be mapped to unemployment
+p3 <- nyc.data %>%
+  ggplot(aes(x=Unemployment_rate, y=Num_maj_felonies)) +
+  geom_point(col="navyblue", size=1.5)+
+  ggtitle("Unemployment Rate vs. Crime") +
+  labs(x="unemployed (percentage)", y="major felonies committed in the neighborhood") +  
+  theme.info
+p3
+nyc.data %>%
+  summarize(cor(Unemployment_rate, Num_maj_felonies))
+```
+  In the graphs above, correlations between pairs of variables were mapped together with a focus on income. When examining each of the charts, there was only one strong positive trend that came about, with an impressive correlation coefficient of `r cor.s4` between percentage of population with bachelors degree and income per capita (USD). As for the graphs depicting the relationships between other variables and income, weaker correlations appeared, especially for crime with income levels, which had a correlation coefficient of `r cor.s3`. For unemployment and school enrollment, when compared alongside per capita income, there were noticeable trends that seemed to follow a more exponential decay-like trend. When assessing the underlying reasons for this, one might be able to note that with higher school enrollment, larger households exist, and thus with more dependents like students, total household income would likely become divided more frequently and therefore into smaller sums per capita. This explains the correlation coefficient of `r cor.s2` between population over age three enrolled in school and income per capita (USD). As for unemployment, it would appear most logical for there to have been an exponential decay in income per capita with higher levels of unemployment as every 1% increase in unemployment extracts significant capital from households annually, and part-time workers are not counted. However, there was only a correlation of `r cor.s1` between unemployment rate and income per capita (USD). When articulating the underlying reasons for why correlations may appear weaker, the main underlying sources of error here lie in the fact that many of the data sets used were summary statistics in a PUMA and as a result there was restricted access to data from individuals that would otherwise enable a macro analysis of these variables. Granted the macroeconomic nature of examining unemployment and crime rates, it also became difficult to discern a trend within one city given other variables at play (i.e., social welfare programs/public expenditures, real estate costs, other facets of inequality). For the sake of concisiveness, the correlations among the main variables highlighted at the beginning (Education and Income per Capita) were prioritized.
+
+## Multiple Regression
+
+<!-- Create a scatter plot matrix to see if explanatory variables have linear relationship with the response-->
+```{r, eval=FALSE}
+nyc.data %>%
+  select(Income_per_capita, Unemployment_rate, Pop_in_school, Bachelors, Num_maj_felonies) %>%
+  ggpairs() +
+  theme.info
+```
+<!-- The variables for number of population in school (Pop_in_school), percentage of population with BS degree (Bachelors), and unemployment rate (Unemployment_rate) have the strongest strongest correlation with the response variable income per capita. The correlation between crime and income per capita is very weak. From visual inspection of the scatter plot matrix, we have determined that it would be possible to for all the explanatory variables to have linear relationship with response variable.-->
+
+```{r}
+#fits a multiple regression model
+
+lm.nyc <- lm(Income_per_capita ~ Unemployment_rate+Pop_in_school+Num_maj_felonies+Bachelors, data=nyc.data)
+```
+
+<!--Regression Model Results-->
+```{r, eval=FALSE}
+# print coefficients table
+lm.nyc %>%
+  tidy() %>%
+  mutate(p.value = formatC(p.value, format="E")) %>%
+  rename(Term = term, 
+        Estimate = estimate,
+        "Std. Error" = std.error,
+        "t statistic" = statistic,
+        "p-value" = p.value) %>%
+  kable(caption="Regression Model Results",
+        align=c("l", "r", "r", "r", "r"))
+```
+
+<!--Create a normal quantile plot to check normality assumption-->
+```{r, eval=FALSE}
+lm.nyc %>% 
+  augment() %>%
+  ggplot(aes(sample=.resid)) +
+  stat_qq() +
+  stat_qq_line() +
+  ggtitle("Normal Quantile Plot\nof Residuals") +
+  theme.info
+```
+<!--Results show that normality assumption is passed because the residuals follow the line closely and there does not appear to be any heavy tails-->
+
+```{r, eval=FALSE}
+y1 <- lm.nyc %>%
+  augment() %>%
+  ggplot(aes(x=.fitted, y=.resid)) +
+  geom_point() +
+  geom_hline(yintercept=0, lty=2) +  
+  ggtitle("Residuals vs.\nFitted Values") +
+  theme.info
+###
+y2 <- lm.nyc %>%
+  augment() %>%
+  ggplot(aes(x=Income_per_capita, y=.resid)) +
+  geom_point() +
+  geom_hline(yintercept=0, lty=2) +  
+  ggtitle("Residuals vs.\nIncome") +
+  theme.info
+###
+y3 <- lm.nyc %>%
+  augment() %>%
+  ggplot(aes(x=Unemployment_rate, y=.resid)) +
+  geom_point() +
+  geom_hline(yintercept=0, lty=2) +  
+  ggtitle("Residuals vs.\nUnemployment") +
+  theme.info
+###
+y4 <- lm.nyc %>%
+  augment() %>%
+  ggplot(aes(x=Pop_in_school, y=.resid)) +
+  geom_point() +
+  geom_hline(yintercept=0, lty=2) +  
+  ggtitle("Residuals vs.\nSchool Enrollment") +
+  theme.info
+###
+y5 <- lm.nyc %>%
+  augment() %>%
+  ggplot(aes(x=Bachelors, y=.resid)) +
+  geom_point() +
+  geom_hline(yintercept=0, lty=2) +  
+  ggtitle("Residuals vs.\nBachelors Degree Attainment") +
+  theme.info
+###
+y6 <- lm.nyc %>%
+  augment() %>%
+  ggplot(aes(x=Num_maj_felonies, y=.resid)) +
+  geom_point() +
+  geom_hline(yintercept=0, lty=2) +  
+  ggtitle("Residuals vs.\nCrime") +
+  theme.info
+###
+grid.arrange(y1, y3, y4, y5, y6, ncol=3)
+```
+<!--Residual plots for none of the explanatory variables show any patterns that would violate the the linearity assumption. However, the residual plot (residuals vs. fitted values) has a slight curve pattern, indicating some non-linearity. Overall, linearity assumption is passed. -->
+
+```{r, eval=FALSE}
+lm.nyc %>% 
+  summary()
+
+lm.nyc %>%
+  tidy()
+
+lm.nyc %>%
+  glance()
+```
+
+```{r rsq}
+r.sq <- lm.nyc %>%
+  glance() %>%
+  pull(r.squared) %>%
+  round(digits=4)
+#result shows that 88.95% of variability in income per capita can be explained by our chosen four explanatory variables
+```
+
+  In this part of the investigation, a multiple linear regression model, $\hat y=$`r round(lm.nyc$coef[2], digits=3)` (unemployment rate) + `r round(lm.nyc$coef[3], digits=3)` (school enrollment) + `r round(lm.nyc$coef[4], digits=3)` (felony count) + `r round(lm.nyc$coef[5], digits=3)` (bachelors degree attainment) +`r round(lm.nyc$coef[1], digits=3)`, was developed to effectively map the connectivity among the variables. Given the r-squared value, also known as the coefficient of determination, of $r^2=$ `r r.sq`, the model seems to have an 88.95% match rate with the collected data points. The model could thereby be viewed as being a fairly accurate one. In addition, the coefficients for each of the subset linear equations, each depicting the rate of change in income per unit increase, presents helpful insights about the potential relationship between the four explanatory variables and response variable income. The only negative slope indicated by the multiple linear regression model was the unemployment rate, which had a slope of `r round(lm.nyc$coef[2], digits=3)`. The negative slope can be explained by the direct impact of lower employment on per capita income levels. 
+
+<!--$\hat y=$`r round(lm.nyc$coef[2], digits=3)` $unemployment \%$ + `r round(lm.nyc$coef[3], digits=3)` $enrollment$ + `r round(lm.nyc$coef[4], digits=3)` $felonies$ + `r round(lm.nyc$coef[5], digits=3)` $bachelors\%$ +`r round(lm.nyc$coef[1], digits=3)`-->
+
+```{r, eval=FALSE}
+#Vector of regression coefficients, including y-intercept and estimated slopes.
+coef.vector <- lm.nyc %>%
+            coef() %>%
+  kable(caption="Multiple Regression Model Coefficients for Each Variable")
+
+coef.vector
+```
+
+After having engaged in an analysis of city wide data, it would appear as though some of the basic correlations existed, though not enough to completely justify the more definitive relationships highlighted by preexisting economic principles and understandings. In order to have generated a more accurate visual and graphical depiction of the relationship between income per capita and education, individual data sets would needed to have been used instead of aggregated summary statistics by PUMA. In conducting the investigation as it currently stands, countless outliers could have affected the correlation depiction two-fold: (1) by being factored into PUMA averages and (2) by being folded into yet another set of summary statistics to generate regression lines of best fit. And while it can be said that none of the earlier hypotheses regarding potential relationships were proven in the case of this experiment, many questions can be posed relating to other external or systemic factors (i.e., redlining, socioeconomic profiling, etc.) that would otherwise impact the quality of the data and the subsequent measurement of correlation.
+
+
+
